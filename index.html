@@ -1,0 +1,1785 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>生态系统模拟器 · Ecosystem Lab</title>
+<style>
+  :root{
+    --bg:#0d1116; --panel:#151b21; --panel2:#1a222a; --line:#2a3642;
+    --txt:#e8edf2; --dim:#8b98a5; --acc:#4cc9f0; --warn:#e8843c; --bad:#e05c5c;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0; background:var(--bg); color:var(--txt); overflow:hidden;
+    font-family:"Segoe UI", system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    display:flex; flex-direction:column; height:100vh;
+    -webkit-tap-highlight-color:transparent;
+  }
+  /* ---------- 顶栏 ---------- */
+  header{
+    height:52px; flex:none; display:flex; align-items:center; gap:14px; padding:0 14px;
+    background:linear-gradient(180deg,#161d25,#121820); border-bottom:1px solid var(--line);
+  }
+  .brand{ font-weight:700; font-size:15px; letter-spacing:.3px; white-space:nowrap; }
+  .brand span{ font-weight:400; color:var(--dim); font-size:11.5px; margin-left:6px; }
+  .hud{
+    margin-left:auto; display:flex; gap:12px; font-size:12px; color:var(--dim);
+    font-variant-numeric:tabular-nums; white-space:nowrap;
+  }
+  .hud b{ color:var(--txt); font-weight:600; }
+  .hud .season{ padding:1px 7px; border-radius:20px; border:1px solid var(--line); }
+  .btns{ display:flex; gap:6px; }
+  button{
+    background:#22303c; color:#d5dee6; border:1px solid #3a4b5a; border-radius:7px;
+    padding:5px 11px; font-size:12.5px; cursor:pointer; white-space:nowrap; font-family:inherit;
+    transition:background .12s, border-color .12s;
+  }
+  button:hover{ background:#2c3e4c; }
+  button.on{ background:#1d5f76; border-color:var(--acc); color:#fff; }
+  button:active{ transform:translateY(1px); }
+  select{
+    background:#22303c; color:#d5dee6; border:1px solid #3a4b5a; border-radius:7px;
+    padding:5px 8px; font-size:12.5px; font-family:inherit; cursor:pointer;
+  }
+  /* ---------- 工具条 ---------- */
+  .toolbar{
+    flex:none; display:flex; align-items:center; gap:16px; padding:7px 14px;
+    background:#111820; border-bottom:1px solid var(--line); overflow-x:auto; scrollbar-width:thin;
+  }
+  .toolbar::-webkit-scrollbar{ height:5px; }
+  .toolbar::-webkit-scrollbar-thumb{ background:#33414f; border-radius:3px; }
+  .group{ display:flex; align-items:center; gap:5px; flex:none; }
+  .group .lbl{ font-size:11px; color:var(--dim); margin-right:3px; white-space:nowrap; }
+  .chip{
+    display:flex; align-items:center; gap:5px; padding:4px 9px; border-radius:20px;
+    border:1px solid #33414f; background:#1a222a; font-size:12px; cursor:pointer; white-space:nowrap;
+    transition:border-color .12s, background .12s;
+  }
+  .chip:hover{ background:#22303c; }
+  .chip.on{ border-color:var(--acc); background:#12303c; color:#fff; }
+  .chip i{ width:9px; height:9px; border-radius:50%; display:inline-block; }
+  /* ---------- 主区 ---------- */
+  main{ flex:1; display:flex; min-height:0; }
+  .stage{
+    flex:1; position:relative; min-width:0; background:#0a0e12;
+    display:flex; align-items:center; justify-content:center; overflow:hidden;
+  }
+  canvas#scene{ display:block; width:100%; height:100%; cursor:crosshair; touch-action:none; }
+  #tip{
+    position:absolute; left:12px; bottom:12px; font-size:11.5px; color:#93a1ad;
+    background:rgba(10,14,18,.78); border:1px solid var(--line); border-radius:7px; padding:4px 9px;
+    pointer-events:none; max-width:70%;
+  }
+  #hint{
+    position:absolute; top:12px; left:50%; transform:translateX(-50%);
+    font-size:12px; background:rgba(76,201,240,.14); border:1px solid rgba(76,201,240,.5);
+    color:#bfe9f7; border-radius:20px; padding:4px 14px; pointer-events:none;
+    opacity:0; transition:opacity .25s;
+  }
+  #hint.show{ opacity:1; }
+  /* ---------- 侧栏 ---------- */
+  aside{
+    width:326px; flex:none; background:#10161d; border-left:1px solid var(--line);
+    overflow-y:auto; scrollbar-width:thin; display:flex; flex-direction:column;
+  }
+  aside::-webkit-scrollbar{ width:6px; }
+  aside::-webkit-scrollbar-thumb{ background:#33414f; border-radius:3px; }
+  section{ border-bottom:1px solid var(--line); padding:11px 13px; }
+  section h3{
+    margin:0 0 9px; font-size:12px; font-weight:600; color:var(--dim);
+    text-transform:uppercase; letter-spacing:.8px; display:flex; align-items:center; gap:6px;
+  }
+  section h3 em{ font-style:normal; color:#5d6b78; font-size:10.5px; text-transform:none; letter-spacing:0; }
+  canvas.chart{ display:block; width:100%; height:120px; background:#0c1116; border:1px solid var(--line); border-radius:7px; }
+  canvas.web{ display:block; width:100%; height:170px; background:#0c1116; border:1px solid var(--line); border-radius:7px; }
+  /* 数据表 */
+  table.data{ width:100%; border-collapse:collapse; font-size:12px; font-variant-numeric:tabular-nums; }
+  table.data th{ text-align:right; color:#5d6b78; font-weight:500; font-size:10.5px; padding:2px 0; }
+  table.data th:first-child{ text-align:left; }
+  table.data td{ text-align:right; padding:2.5px 0; border-top:1px solid #1c242c; }
+  table.data td:first-child{ text-align:left; }
+  table.data tr.dead td{ opacity:.32; }
+  .swatch{ display:inline-block; width:8px; height:8px; border-radius:2px; margin-right:6px; vertical-align:middle; }
+  /* 气候滑条 */
+  .slider{ display:flex; align-items:center; gap:9px; margin:7px 0; }
+  .slider label{ font-size:11.5px; color:var(--dim); min-width:62px; }
+  .slider input[type=range]{ flex:1; min-width:70px; accent-color:var(--acc); height:18px; }
+  .slider .val{ font-size:11.5px; color:var(--acc); width:52px; text-align:right; font-variant-numeric:tabular-nums; }
+  /* 能量账本 */
+  .ledger{ display:grid; grid-template-columns:1fr auto; gap:3px 10px; font-size:11.5px; color:var(--dim); }
+  .ledger b{ color:var(--txt); font-weight:600; font-variant-numeric:tabular-nums; }
+  .ledger .pos{ color:#7fd8a0; }
+  .ledger .neg{ color:#e8843c; }
+  /* ---------- 窄屏 ---------- */
+  @media (max-width: 900px){
+    header{ height:auto; flex-wrap:wrap; gap:8px; padding:8px 10px; }
+    .brand{ font-size:14px; }
+    .hud{ margin-left:0; order:3; width:100%; justify-content:space-between; }
+    main{ flex-direction:column; }
+    .stage{ height:46vh; flex:none; }
+    aside{ width:auto; flex:1; border-left:none; border-top:1px solid var(--line); }
+    canvas#scene{ height:100%; }
+    button{ padding:6px 12px; }
+    .chip{ padding:5px 10px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">🌿 生态系统模拟器<span>Ecosystem Lab · 食物网 + 环境</span></div>
+  <div class="btns">
+    <button id="btnPlay">▶ 开始</button>
+    <button id="btnStep">单步</button>
+    <button id="btnReset">重置</button>
+    <select id="selSpeed">
+      <option value="0.25">0.25×</option>
+      <option value="1" selected>1×</option>
+      <option value="2">2×</option>
+      <option value="4">4×</option>
+      <option value="8">8×</option>
+      <option value="16">16×</option>
+    </select>
+  </div>
+  <div class="hud">
+    <span>时间 <b id="hudTime">0s</b></span>
+    <span>第 <b id="hudYear">1</b> 年</span>
+    <span class="season" id="hudSeason">🌱 春</span>
+    <span>FPS <b id="hudFps">60</b></span>
+  </div>
+</header>
+
+<div class="toolbar">
+  <div class="group">
+    <span class="lbl">投放</span>
+    <div id="spawnGroup" style="display:flex;gap:5px"></div>
+  </div>
+  <div class="group">
+    <span class="lbl">工具</span>
+    <div id="toolGroup" style="display:flex;gap:5px"></div>
+  </div>
+  <div class="group">
+    <span class="lbl">场景</span>
+    <select id="selPreset"></select>
+  </div>
+</div>
+
+<main>
+  <div class="stage">
+    <canvas id="scene"></canvas>
+    <div id="hint"></div>
+    <div id="tip">点击画布投放所选物种 · 空格暂停 · R 重置</div>
+  </div>
+  <aside>
+    <section>
+      <h3>种群曲线 <em id="chartNote">近 120s</em></h3>
+      <canvas class="chart" id="chart"></canvas>
+    </section>
+    <section>
+      <h3>食物网 <em>粗细 = 能量流</em></h3>
+      <canvas class="web" id="web"></canvas>
+    </section>
+    <section>
+      <h3>物种数据</h3>
+      <table class="data" id="statsTable"></table>
+    </section>
+    <section>
+      <h3>能量账本 <em>E</em></h3>
+      <div class="ledger" id="ledger"></div>
+    </section>
+    <section>
+      <h3>气候</h3>
+      <div id="clim"></div>
+    </section>
+  </aside>
+</main>
+
+<script>
+"use strict";
+/* ==========================================================================
+   生态系统模拟器 v2.0 · 食物网 + 环境
+   --------------------------------------------------------------------------
+   设计原则（对应 v1 的经验）：
+   1) 能量是唯一货币：吃、动、繁殖、逃跑全部折算能量，归零即死
+   2) 参数分层：物种参数（食性/体型/代谢）与全局参数（气候/季节）分离
+   3) 食物网用矩阵描述（谁吃谁 + 转化效率），加物种只需改表
+   4) 空间网格分区：每个个体只看邻居，避免 O(n²)
+   ========================================================================== */
+
+/* ============ 1. 世界配置 ============ */
+const WW = 1600, WH = 1000;                  // 世界逻辑尺寸
+const CELL = 16;                             // 资源格边长
+const GW = Math.floor(WW / CELL), GH = Math.floor(WH / CELL);   // 100 × 62
+const SIM_DT = 1 / 30;                       // 固定模拟步长
+const HASH_CELL = 90;                        // 空间哈希格边
+const AI_INTERVAL = 0.16;                    // 决策间隔 s
+const GROW_INTERVAL = 0.4;                   // 植被生长批处理间隔 s
+
+/* 地形类型 */
+const T_WATER = 0, T_GRASS = 1, T_FOREST = 2, T_DESERT = 3;
+const TERRAIN_NAME = { 0:'水域', 1:'草原', 2:'森林', 3:'荒漠' };
+const TERRAIN_COLOR = { 0:[26,44,62], 1:[38,58,40], 2:[26,46,34], 3:[66,58,42] };
+
+/* 资源格能量密度 */
+const GRASS_ENERGY = 40;                     // 满生物量草本 → E
+const SHRUB_ENERGY = 62;                     // 满生物量灌木/树叶 → E
+const CONV_E = 0.88;                         // 捕食能量转化率
+const DECAY_RETURN = 0.55;                   // 死亡后回归土壤的能量比例（其余为代谢热耗散）
+
+/* 季节与气候（全局参数，可被 UI 改） */
+const params = {
+  rain: 1.0,          // 降雨系数 0.3~2.0 → 植被生长率倍率
+  temp: 1.0,          // 温度系数 0.6~1.4 → 植被生长率倍率
+  yearLen: 120,       // 一年多少秒
+  mutP: 0.15,         // 大变异概率
+  metabK: 1.0,        // 全局代谢系数（只管动物耗能）
+  vegK: 1.80,         // 生产力系数（只管植被生长；补偿季节低谷，使年均 ≈ 1）
+  catchBase: 0.5,     // 基础捕获率
+  refuge: 22,         // 低密度避难所：猎物少于该量级时捕食者显著难以遇到（Type III 功能反应）
+};
+
+/* ============ 2. 物种表（食物网节点） ============ */
+/* 基因：speed 速度 / size 体型 / vision 视野 / repro 繁殖阈值
+   体型是核心权衡：cap = baseCap·size（储能多）、metab ∝ size^0.75（耗能多，Kleiber 定律） */
+const SPECIES = {
+  insect: {
+    name:'昆虫', emoji:'🐜', color:'#b7e26a', radius:2.6, tier:1,
+    diet:{ grass:0.45, shrub:0.35 },
+    baseCap:32, metab:0.55, eatRate:4.2, popCap:600,
+    genes:{ speed:{min:20,max:90,init:46}, size:{min:0.15,max:0.5,init:0.26},
+            vision:{min:40,max:140,init:72}, repro:{min:0.5,max:0.9,init:0.66} },
+    maturity:1.5, cooldown:1.6, maxAge:110, startE:0.55, flee:1.25, canFly:false,
+  },
+  rabbit: {
+    name:'兔', emoji:'🐇', color:'#d9c6a0', radius:4.6, tier:2,
+    diet:{ grass:1.0 },                        // 纯草食（草原层）
+    baseCap:100, metab:1.0, eatRate:2.4, popCap:300,
+    genes:{ speed:{min:30,max:170,init:62}, size:{min:0.55,max:1.9,init:1.0},
+            vision:{min:60,max:320,init:124}, repro:{min:0.5,max:0.95,init:0.78} },
+    maturity:7, cooldown:13, maxAge:620, startE:0.6, flee:1.35, canFly:false,
+  },
+  bird: {
+    name:'鸟', emoji:'🐦', color:'#7fd8e8', radius:4.0, tier:3,
+    diet:{ insect:0.9, shrub:0.5 },
+    baseCap:70, metab:1.0, eatRate:4.2, popCap:60,
+    genes:{ speed:{min:60,max:210,init:104}, size:{min:0.4,max:1.3,init:0.72},
+            vision:{min:110,max:380,init:210}, repro:{min:0.55,max:0.95,init:0.8} },
+    maturity:9, cooldown:19, maxAge:520, startE:0.62, flee:1.5, canFly:true, sprint:1.15,
+  },
+  deer: {
+    name:'鹿', emoji:'🦌', color:'#c98b5e', radius:7.4, tier:2,
+    diet:{ shrub:0.95, grass:0.30 },           // 生态位分化：以灌木/树叶为主（森林层），与兔（纯草食）错开
+    baseCap:150, metab:1.3, eatRate:3.2, popCap:60,
+    genes:{ speed:{min:40,max:180,init:74}, size:{min:1.4,max:3.4,init:2.3},
+            vision:{min:80,max:300,init:152}, repro:{min:0.62,max:0.98,init:0.85} },
+    maturity:15, cooldown:28, maxAge:980, startE:0.66, flee:1.28, canFly:false, sprint:1.06,
+  },
+  fox: {
+    name:'狐', emoji:'🦊', color:'#e8843c', radius:5.8, tier:3,
+    diet:{ rabbit:0.85, bird:0.95, insect:0.18, grass:0.18 },   // 杂食兜底：猎物稀少时可食草，避免饿绝
+    baseCap:170, metab:0.72, eatRate:1.4, popCap:14,   // eatRate>0：猎物稀少时可食草兜底；上限 34→14（原值使兔被吃绝）
+    genes:{ speed:{min:50,max:180,init:84}, size:{min:1.0,max:2.3,init:1.5},
+            vision:{min:110,max:360,init:184}, repro:{min:0.62,max:0.98,init:0.86} },
+    maturity:13, cooldown:30, maxAge:760, startE:0.7, flee:1.1, canFly:false, sprint:1.30,
+  },
+  wolf: {
+    name:'狼', emoji:'🐺', color:'#9aa7b2', radius:8.0, tier:4,
+    diet:{ deer:0.9, rabbit:0.30, fox:0.12 },     // 兔权重 0.65→0.30（过高吃绝兔）；fox 0.45→0.12（保留为食但不过度，完全去除会使狼饿死）
+    baseCap:330, metab:1.05, eatRate:0, popCap:14,
+    genes:{ speed:{min:50,max:190,init:79}, size:{min:1.8,max:3.6,init:2.6},
+            vision:{min:120,max:380,init:206}, repro:{min:0.66,max:0.99,init:0.9} },
+    maturity:18, cooldown:50, maxAge:1150, startE:0.72, flee:1.0, canFly:false, sprint:1.24,
+  },
+};
+const SPECIES_KEYS = Object.keys(SPECIES);
+const CONSUMERS = SPECIES_KEYS.filter(k => SPECIES[k].tier >= 2);   // 需要捕食/觅食的
+const ALL_NODES = ['grass','shrub'].concat(SPECIES_KEYS);          // 食物网节点
+
+/* 各族群适宜地形：移动速度倍率（鸟飞行不受地形影响） */
+const HABITAT = {
+  insect: { 0:0.15, 1:1.0, 2:0.9, 3:0.8 },
+  rabbit: { 0:0.25, 1:1.0, 2:0.86, 3:0.7 },
+  bird:   { 0:1.0,  1:1.0, 2:1.0, 3:1.0 },
+  deer:   { 0:0.25, 1:0.9, 2:1.0, 3:0.6 },
+  fox:    { 0:0.35, 1:1.0, 2:0.95, 3:0.85 },
+  wolf:   { 0:0.35, 1:1.0, 2:0.9, 3:0.8 },
+};
+
+/* ============ 3. 随机与变异 ============ */
+function rnd(a, b){ return a + Math.random() * (b - a); }
+function gauss(){
+  let u = 0, v = 0;
+  while(u === 0) u = Math.random();
+  while(v === 0) v = Math.random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+function clamp(v, a, b){ return v < a ? a : (v > b ? b : v); }
+
+function mutateGene(value, range){
+  let v;
+  if(Math.random() < params.mutP) v = value * (1 + rnd(-0.20, 0.20));
+  else v = value * (1 + gauss() * 0.05);
+  return clamp(v, range.min, range.max);
+}
+function mutateGenes(sp, g){
+  const R = SPECIES[sp].genes;
+  return {
+    speed:  mutateGene(g.speed,  R.speed),
+    size:   mutateGene(g.size,   R.size),
+    vision: mutateGene(g.vision, R.vision),
+    repro:  mutateGene(g.repro,  R.repro),
+  };
+}
+function initGenes(sp){
+  const R = SPECIES[sp].genes;
+  return { speed:R.speed.init, size:R.size.init, vision:R.vision.init, repro:R.repro.init };
+}
+/* 个体能量上限由体型决定（体型大 → 储能多，但代谢也高） */
+function energyCap(sp, genes){ return SPECIES[sp].baseCap * genes.size; }
+
+/* ============ 4. 地形生成 ============ */
+const terrain = new Uint8Array(GW * GH);
+function tIdx(cx, cy){ return cy * GW + cx; }
+
+/* 低频值噪声：粗网格随机 → 双线性放大 → 平滑，得到自然斑块 */
+function valueNoise(cw, ch){
+  const g = new Float32Array(cw * ch);
+  for(let i = 0; i < g.length; i++) g[i] = Math.random();
+  return function(x, y){
+    const fx = clamp(x, 0, cw - 1.001), fy = clamp(y, 0, ch - 1.001);
+    const x0 = Math.floor(fx), y0 = Math.floor(fy);
+    const tx = fx - x0, ty = fy - y0;
+    const sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
+    const a = g[y0 * cw + x0], b = g[y0 * cw + Math.min(x0 + 1, cw - 1)];
+    const c = g[Math.min(y0 + 1, ch - 1) * cw + x0], d = g[Math.min(y0 + 1, ch - 1) * cw + Math.min(x0 + 1, cw - 1)];
+    return (a * (1 - sx) + b * sx) * (1 - sy) + (c * (1 - sx) + d * sx) * sy;
+  };
+}
+
+function genTerrain(){
+  const cw = 9, ch = 6;
+  const moist = valueNoise(cw, ch);
+  const fert  = valueNoise(cw + 3, ch + 2);
+  const tmp = new Uint8Array(GW * GH);
+  for(let cy = 0; cy < GH; cy++){
+    for(let cx = 0; cx < GW; cx++){
+      const nx = cx / GW * (cw - 1), ny = cy / GH * (ch - 1);
+      const m = moist(nx, ny), f = fert(cx / GW * (cw + 2), cy / GH * (ch + 1));
+      let t;
+      if(m > 0.74) t = T_WATER;
+      else if(m > 0.54) t = T_FOREST;
+      else if(f < 0.36) t = T_DESERT;
+      else t = T_GRASS;
+      tmp[tIdx(cx, cy)] = t;
+    }
+  }
+  /* 两次多数平滑：去掉孤立噪点，让斑块成片 */
+  for(let pass = 0; pass < 2; pass++){
+    for(let cy = 0; cy < GH; cy++){
+      for(let cx = 0; cx < GW; cx++){
+        const cnt = [0, 0, 0, 0];
+        for(let dy = -1; dy <= 1; dy++) for(let dx = -1; dx <= 1; dx++){
+          const nx = cx + dx, ny = cy + dy;
+          if(nx < 0 || nx >= GW || ny < 0 || ny >= GH) continue;
+          cnt[tmp[tIdx(nx, ny)]]++;
+        }
+        let best = 0;
+        for(let t = 1; t < 4; t++) if(cnt[t] > cnt[best]) best = t;
+        if(cnt[best] >= 5) terrain[tIdx(cx, cy)] = best;
+        else terrain[tIdx(cx, cy)] = tmp[tIdx(cx, cy)];
+      }
+    }
+    tmp.set(terrain);
+  }
+  terrainCount = countTerrain();
+}
+let terrainCount = [0,0,0,0];
+function countTerrain(){
+  const c = [0,0,0,0];
+  for(let i = 0; i < terrain.length; i++) c[terrain[i]]++;
+  return c;
+}
+function terrainAt(x, y){
+  const cx = clamp(Math.floor(x / CELL), 0, GW - 1);
+  const cy = clamp(Math.floor(y / CELL), 0, GH - 1);
+  return terrain[tIdx(cx, cy)];
+}
+
+/* ============ 5. 植被双层（草本 / 灌木） ============ */
+const grass = new Float32Array(GW * GH);     // 草本生物量 0~1
+const shrub = new Float32Array(GW * GH);     // 灌木/树叶生物量 0~1
+
+/* 各植被在不同地形的基础生长率 */
+const VEG_BASE = {
+  grass: { 0:0.0,  1:0.040, 2:0.014, 3:0.006 },
+  shrub: { 0:0.0,  1:0.010, 2:0.028, 3:0.002 },
+};
+
+function seedVeg(coverage){
+  grass.fill(0); shrub.fill(0);
+  for(let i = 0; i < grass.length; i++){
+    const t = terrain[i];
+    if(t === T_WATER) continue;
+    const r = Math.random();
+    if(r < coverage) grass[i] = rnd(0.5, 1);
+    if(r < coverage * 0.6) shrub[i] = rnd(0.4, 0.9);
+  }
+}
+let growTimer = 0;
+/* 季节相位 → 生长倍率（春夏旺，秋冬衰） */
+function seasonPhase(){ return (simTime % params.yearLen) / params.yearLen; }
+function seasonGrowthMul(){
+  const ph = seasonPhase();
+  const tempF = 0.85 + 0.50 * Math.sin(2 * Math.PI * (ph - 0.05));   // 温度：夏高（1.33）冬低（0.38）
+  const rainF = 0.90 + 0.35 * Math.cos(2 * Math.PI * ph);            // 降雨：春多（1.25）秋干（0.55）
+  return clamp(params.rain * rainF, 0.05, 2.4) * clamp(params.temp * tempF, 0.08, 2.0);
+}
+function growVeg(dt){
+  growTimer += dt;
+  if(growTimer < GROW_INTERVAL) return;
+  const step = growTimer; growTimer = 0;
+  const mul = seasonGrowthMul() * params.vegK;
+  let added = 0;                              // 本次生长实际注入的生物量能量（能量账本）
+  for(let cy = 0; cy < GH; cy++){
+    for(let cx = 0; cx < GW; cx++){
+      const i = tIdx(cx, cy), t = terrain[i];
+      if(t === T_WATER) continue;
+      /* 草本：逻辑斯蒂 + 邻居蔓延 */
+      const gr = VEG_BASE.grass[t] * mul;
+      if(grass[i] > 0.001){
+        const d = gr * grass[i] * (1 - grass[i]) * step;
+        if(d > 0){ const b0 = grass[i]; grass[i] = Math.min(1, b0 + d); added += (grass[i] - b0) * GRASS_ENERGY; }
+      } else {
+        let fert = 0;
+        for(let dy = -1; dy <= 1; dy += 2){
+          const ny = cy + dy; if(ny < 0 || ny >= GH) continue;
+          if(grass[tIdx(cx, ny)] > 0.5) fert++;
+        }
+        for(let dx = -1; dx <= 1; dx += 2){
+          const nx = cx + dx; if(nx < 0 || nx >= GW) continue;
+          if(grass[tIdx(nx, cy)] > 0.5) fert++;
+        }
+        if(fert > 0 && Math.random() < 0.05 * fert * step){ grass[i] = 0.03; added += 0.03 * GRASS_ENERGY; }
+      }
+      /* 灌木：慢，但森林里占优 */
+      const sr = VEG_BASE.shrub[t] * mul;
+      if(shrub[i] > 0.001){
+        const d = sr * shrub[i] * (1 - shrub[i]) * step;
+        if(d > 0){ const b0 = shrub[i]; shrub[i] = Math.min(1, b0 + d); added += (shrub[i] - b0) * SHRUB_ENERGY; }
+      }
+    }
+  }
+  photosynthesis += added;                   // 能量账本：光合同化（精确）
+  vegDirty = true;
+}
+function vegAt(x, y, kind){
+  const cx = clamp(Math.floor(x / CELL), 0, GW - 1);
+  const cy = clamp(Math.floor(y / CELL), 0, GH - 1);
+  const i = tIdx(cx, cy);
+  return kind === 'grass' ? grass[i] : shrub[i];
+}
+/* 在 (x,y) 取食某类植被，返回实际获得能量 */
+function eatVeg(x, y, kind, rate, dt){
+  const cx = clamp(Math.floor(x / CELL), 0, GW - 1);
+  const cy = clamp(Math.floor(y / CELL), 0, GH - 1);
+  const i = tIdx(cx, cy);
+  const arr = kind === 'grass' ? grass : shrub;
+  const per = kind === 'grass' ? GRASS_ENERGY : SHRUB_ENERGY;
+  const available = arr[i] * per;
+  const got = Math.min(rate * dt, available);
+  if(got > 0){
+    arr[i] = Math.max(0, arr[i] - got / per);
+    vegDirty = true;
+  }
+  return got;
+}
+function totalVeg(){ let s = 0; for(let i = 0; i < grass.length; i++) s += grass[i] * GRASS_ENERGY + shrub[i] * SHRUB_ENERGY; return s; }
+let photosynthesis = 0;
+let vegDirty = true;
+
+/* ============ 6. 个体模型 ============ */
+let animals = [];
+let nextId = 1;
+let simTime = 0;
+let generationMax = {};
+let deaths = { starved:0, eaten:0, aged:0, hunted:0 };
+let deathsBy = {};                   // [物种][死因] 计数
+let birthCount = {};
+let minPopWindow = {};               // 近 120s 各物种最小值（判断「是否长期共存」）
+let windowTimer = 0;
+let maxPop = {};
+for(const k of SPECIES_KEYS){ generationMax[k] = 1; birthCount[k] = 0; maxPop[k] = 0; }
+
+function spawnAnimal(sp, x, y, genes, gen){
+  const S = SPECIES[sp];
+  const g = genes || initGenes(sp);
+  const cap = energyCap(sp, g);
+  const a = {
+    id: nextId++, sp,
+    x: x !== undefined ? x : rnd(40, WW - 40),
+    y: y !== undefined ? y : rnd(40, WH - 40),
+    dir: rnd(0, Math.PI * 2),
+    moving: 0.4,
+    genes: g,
+    cap,
+    E: cap * S.startE,
+    age: 0,
+    lastSplit: -999,
+    gen: gen || 1,
+    state: 'wander',
+    target: null,
+    aiTimer: Math.random() * AI_INTERVAL,
+    chaseTime: 0,
+    chaseTarget: null,
+    chaseCooldown: 0,
+    panic: 0,
+    digest: 0,
+    lifespan: S.maxAge * rnd(0.8, 1.25),   // 个体寿命（自然死亡）
+    dead: false,
+    foodKind: null,
+  };
+  animals.push(a);
+  if(a.gen > generationMax[sp]) generationMax[sp] = a.gen;
+  return a;
+}
+
+/* 代谢：基础代谢 ∝ 体型^0.75（Kleiber 定律）+ 运动附加项（快 = 贵） */
+/* 运动代谢附加项：以 speed=100 为基准归一化，
+   使「速度」与「体型」两个基因对代谢的贡献可比较（原来 0.021*speed 线性叠加，
+   速度 74 的鹿全速时代谢达基础值 2.55 倍，觅食净收益为负 → 必死） */
+const MOVE_K = 0.9;                     // 运动代谢系数
+function metabolism(a){
+  const S = SPECIES[a.sp];
+  const basal = S.metab * Math.pow(a.genes.size, 0.75);
+  const move = 1 + MOVE_K * Math.pow(a.genes.speed / 100, 1.5) * a.moving * a.moving;
+  return basal * move * params.metabK;
+}
+/* ============ 6b. 能量经济（供反推标定与测试核对） ============
+   每个物种的收支必须满足：E_in ≥ E_out，否则必然饿死。
+   这里把四项开销显式算出来，参数不再是"猜"，而是由目标种群反推。 */
+function econOf(sp, genes){
+  const S = SPECIES[sp];
+  const g = genes || initGenes(sp);
+  const cap = energyCap(sp, g);
+  const basal = S.metab * Math.pow(g.size, 0.75) * params.metabK;
+  const mRest = basal * (1 + MOVE_K * Math.pow(g.speed / 100, 1.5) * 0.20 * 0.20);   // 静息
+  const mEat  = basal * (1 + MOVE_K * Math.pow(g.speed / 100, 1.5) * 0.06 * 0.06);   // 进食
+  const mSeek = basal * (1 + MOVE_K * Math.pow(g.speed / 100, 1.5) * 1.0);           // 全速觅食
+  const intake = S.eatRate * g.size;                            // 每秒潜在取食（上限）
+  const need = cap * g.repro;                                   // 繁殖所需能量
+  const interval = need / Math.max(0.01, intake - mEat);        // 攒够一胎所需时间
+  const cooldown = S.cooldown;
+  const perBirth = cap * 0.88;                                  // 每胎子代+自身保留总量
+  return { sp, cap, basal, mRest, mEat, mSeek, intake,
+           netEat: intake - mEat, netSeek: intake - mSeek,
+           need, interval, cooldown, perBirth,
+           /* 维持自己 1 秒所需猎物量（捕食者） */
+           preyPerSec: mRest / Math.max(0.001, CONV_E) };
+}
+
+/* 有效速度：基因速度 × 地形适宜度 × 惊逃加成 */
+function effSpeed(a){
+  const S = SPECIES[a.sp];
+  const hab = S.canFly ? 1 : (HABITAT[a.sp][terrainAt(a.x, a.y)] || 1);
+  const flee = a.panic > 0 ? S.flee : 1;
+  const sprint = (a.state === 'chase' && S.sprint) ? S.sprint : 1;   // 追捕冲刺：捕食者必须跑得过惊逃的猎物
+  return a.genes.speed * hab * flee * sprint;
+}
+
+/* ============ 7. 空间哈希 ============ */
+let hashMap = new Map();
+function hashKey(cx, cy){ return cx * 4096 + cy; }
+function rebuildHash(){
+  hashMap.clear();
+  for(const a of animals){
+    const k = hashKey(Math.floor(a.x / HASH_CELL), Math.floor(a.y / HASH_CELL));
+    let arr = hashMap.get(k);
+    if(!arr){ arr = []; hashMap.set(k, arr); }
+    arr.push(a);
+  }
+}
+/* 遍历 (x,y) 半径内所有个体 */
+function forEachNear(x, y, radius, fn){
+  const cx = Math.floor(x / HASH_CELL), cy = Math.floor(y / HASH_CELL);
+  const span = Math.ceil(radius / HASH_CELL);
+  for(let dy = -span; dy <= span; dy++){
+    for(let dx = -span; dx <= span; dx++){
+      const arr = hashMap.get(hashKey(cx + dx, cy + dy));
+      if(!arr) continue;
+      for(let i = 0; i < arr.length; i++){
+        const a = arr[i];
+        if(a.dead) continue;
+        const ddx = a.x - x, ddy = a.y - y;
+        if(ddx * ddx + ddy * ddy <= radius * radius) fn(a);
+      }
+    }
+  }
+}
+/* 找最近的目标（fn 返回 true 表示命中） */
+function findNearest(x, y, radius, fn){
+  let best = null, bestD = radius * radius;
+  const cx = Math.floor(x / HASH_CELL), cy = Math.floor(y / HASH_CELL);
+  const span = Math.ceil(radius / HASH_CELL);
+  for(let dy = -span; dy <= span; dy++){
+    for(let dx = -span; dx <= span; dx++){
+      const arr = hashMap.get(hashKey(cx + dx, cy + dy));
+      if(!arr) continue;
+      for(let i = 0; i < arr.length; i++){
+        const a = arr[i];
+        if(a.dead) continue;
+        const ddx = a.x - x, ddy = a.y - y;
+        const d2 = ddx * ddx + ddy * ddy;
+        if(d2 < bestD && fn(a)){ bestD = d2; best = a; }
+      }
+    }
+  }
+  return best;
+}
+/* 找最近的肥沃资源格：环形逐圈搜索 + 够肥即停
+   （关键性能优化：视野 200~380px 时若全量扫描，每次要查上万格；
+     而食物充足时第一圈就能命中，只有贫瘠时才逐圈扩大） */
+function findBestVeg(x, y, kind, radius){
+  const arr = kind === 'grass' ? grass : shrub;
+  const cx0 = Math.floor(x / CELL), cy0 = Math.floor(y / CELL);
+  const rMax = Math.min(Math.ceil(radius / CELL), 13);      // 上限 13 格 ≈ 208px
+  let best = null, bestV = 0;
+  for(let r = 1; r <= rMax; r++){
+    for(let dy = -r; dy <= r; dy++){
+      for(let dx = -r; dx <= r; dx++){
+        if(Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;   // 只走第 r 圈
+        const cx = cx0 + dx, cy = cy0 + dy;
+        if(cx < 0 || cx >= GW || cy < 0 || cy >= GH) continue;
+        const v = arr[tIdx(cx, cy)];
+        if(v > bestV){ bestV = v; best = { x: cx * CELL + CELL / 2, y: cy * CELL + CELL / 2, v }; }
+      }
+    }
+    if(bestV >= 0.55) break;                                   // 够肥就停
+  }
+  if(!best || bestV < 0.03) return null;
+  return best;
+}
+
+/* ============ 8. 食物网预计算 ============ */
+for(const k of SPECIES_KEYS){
+  const S = SPECIES[k];
+  S.preyList   = Object.keys(S.diet).filter(x => SPECIES[x]);      // 动物性食物（捕食对象）
+  S.plantList  = Object.keys(S.diet).filter(x => !SPECIES[x]);     // 植物性食物
+  S.isPredator = S.preyList.length > 0;
+}
+
+/* ============ 9. 能量账本（用于守恒校验与面板显示） ============ */
+let metabLoss = 0;      // 动物代谢耗散（热）
+let decayLoss = 0;      // 尸体分解中未回归土壤的部分
+let reproLoss = 0;      // 繁殖代价耗散
+function plantEnergy(){ let s = 0; for(let i = 0; i < grass.length; i++) s += grass[i] * GRASS_ENERGY + shrub[i] * SHRUB_ENERGY; return s; }
+function animalEnergy(){ let s = 0; for(const a of animals) if(!a.dead) s += a.E; return s; }
+function totalSystemE(){ return plantEnergy() + animalEnergy(); }
+
+/* ============ 10. 决策（AI） ============ */
+/* 能否捕食：食物网有边 + 体型判定 + 幼体脆弱期
+   关键生态学：捕食者主要猎杀幼体与弱者，成年大动物靠体型威慑而非速度自保 */
+function canPrey(pred, prey){
+  if(pred === prey || pred.sp === prey.sp) return false;
+  if(!SPECIES[pred.sp].diet[prey.sp]) return false;
+  const PS = SPECIES[prey.sp];
+  if(prey.age < PS.maturity * 0.20) return false;                // 幼体保护期（原 0.05 过短，幼崽一出生即被吃）
+  const isJuv = prey.age < PS.maturity;
+  /* 捕食者体型必须达到猎物的 threshold 倍才敢下手。
+     历史 bug：成年阈值 1.15 时，狼(2.6) ≥ 鹿(2.0)×1.15=2.30 → 成年鹿毫无体型威慑，
+     鹿群被清零（实测 0/5）。修法：1.15 → 1.40，成年鹿需体型 <1.857 才被捕，
+     幼体阈值 0.62 → 1.05，保留「捕食者主要猎杀幼体与弱者」的设计意图。 */
+  const threshold = isJuv ? 1.05 : 1.40;
+  if(pred.genes.size < prey.genes.size * threshold) return false;
+  return true;
+}
+
+/* 这一餐值不值得追：收益必须盖过追捕成本。
+   否则捕食者会去追满地都是的小虫（一餐 0.5 E，追一次却烧 15 E）——实测狐就是这样饿死的 */
+function worthPrey(a, o){
+  if(!canPrey(a, o)) return false;
+  const gain = o.E * CONV_E * SPECIES[a.sp].diet[o.sp];
+  return gain >= a.cap * 0.025;
+}
+/* 在视野内挑「性价比最高」的猎物：食性效率 × 猎物体量 / 距离 */
+function findBestPrey(a, radius){
+  const S = SPECIES[a.sp];
+  let best = null, bestScore = 0;
+  forEachNear(a.x, a.y, radius, function(o){
+    if(!worthPrey(a, o)) return;
+    const d = Math.hypot(o.x - a.x, o.y - a.y);
+    const score = (S.diet[o.sp] * Math.pow(o.genes.size, 0.9)) / (1 + d / 120);
+    if(score > bestScore){ bestScore = score; best = o; }
+  });
+  return best;
+}
+
+function think(a){
+  const S = SPECIES[a.sp];
+  const vis = a.genes.vision;
+
+  /* ① 威胁优先：附近有天敌就逃（狐也会被狼吃，所以不看自己是不是捕食者） */
+  const threat = findNearest(a.x, a.y, vis * 1.1, o => canPrey(o, a));
+  if(threat){
+    a.state = 'flee';
+    const dx = a.x - threat.x, dy = a.y - threat.y;
+    const d = Math.hypot(dx, dy) || 1;
+    a.target = { x: clamp(a.x + dx / d * 170, 20, WW - 20), y: clamp(a.y + dy / d * 170, 20, WH - 20) };
+    a.panic = 2.8;
+    a.foodKind = null;
+    return;
+  }
+
+  /* ② 捕食者在消化：静息（否则消化期仍在高代谢空转，捕食者必然入不敷出） */
+  if(S.isPredator && a.digest > 0){
+    a.state = 'rest'; a.target = null; a.foodKind = null;
+    return;
+  }
+  /* ③ 捕食者：能量不满 → 找猎物
+     但「杂食者饿极时优先吃素」：植物是稳定食物，纯靠狩猎会在猎物稀少时饿死 */
+  const desperate = a.E < a.cap * 0.4;
+  if(S.isPredator && a.E < a.cap * 0.94 && !(desperate && S.plantList.length)){
+    const prey = findBestPrey(a, vis);
+    if(prey){
+      a.state = 'chase';
+      a.target = { x: prey.x, y: prey.y, ref: prey };
+      a.foodKind = null;
+      /* 开始一次新的追捕：耐力 ∝ 体型（大动物耐力好，但猎物越强越难拖住） */
+      if(a.chaseTime <= 0){
+        const sizeRatio = clamp(prey.genes.size / Math.max(0.3, a.genes.size), 0.4, 2.5);
+        a.chaseTarget = prey.id;
+        a.chaseTime = clamp(9 * Math.pow(a.genes.size / Math.max(0.4, prey.genes.size), 0.5) / sizeRatio, 2.5, 22);
+      }
+      return;
+    }
+  }
+
+  /* ④ 草食 / 杂食：按食性权重依次尝试找植物 */
+  if(S.plantList.length){
+    const sorted = S.plantList.slice().sort((p, q) => S.diet[q] - S.diet[p]);
+    const reach = a.panic > 0 ? vis * 1.25 : vis;
+    for(const kind of sorted){
+      /* 关键：脚下这格还够吃就地停下吃。
+         否则觅食全程 moving=1，代谢升到基础的 1.3~3.2 倍，吃的不够跑的 → 全场饿死 */
+      if(vegAt(a.x, a.y, kind) > 0.18){
+        a.state = 'eat'; a.target = null; a.foodKind = kind; return;
+      }
+      const spot = findBestVeg(a.x, a.y, kind, reach);
+      if(spot){ a.state = 'seek'; a.target = spot; a.foodKind = kind; return; }
+    }
+  }
+
+  /* ⑤ 无事可做：漫游 */
+  a.state = 'wander';
+  a.target = null;
+  a.foodKind = null;
+}
+
+/* ============ 11. 移动 ============ */
+function moveAnimal(a, dt){
+  /* 进食 / 静息状态：原地小幅度移动，代谢接近基础值 */
+  if(a.state === 'eat' || a.state === 'rest'){
+    a.moving = a.state === 'eat' ? 0.06 : 0.20;
+    if(Math.random() < 0.03) a.dir += rnd(-0.7, 0.7);
+    a.x += Math.cos(a.dir) * effSpeed(a) * a.moving * dt;
+    a.y += Math.sin(a.dir) * effSpeed(a) * a.moving * dt;
+    const mb = 14;
+    if(a.x < mb) a.x = mb; else if(a.x > WW - mb) a.x = WW - mb;
+    if(a.y < mb) a.y = mb; else if(a.y > WH - mb) a.y = WH - mb;
+    return;
+  }
+  let ux, uy;
+  if(a.target){
+    const dx = a.target.x - a.x, dy = a.target.y - a.y;
+    const d = Math.hypot(dx, dy) || 1;
+    a.dir = Math.atan2(dy, dx);
+    a.moving = 1;
+    const slow = d < 26 ? d / 26 : 1;            // 接近目标减速，避免来回抖动
+    ux = dx / d * slow; uy = dy / d * slow;
+  } else {
+    /* 方向持久的搜索轨迹：原 rnd(-1.1,1.1) 使漫游退化为原地乱转，
+       捕食者只能靠运气撞见猎物（实测狼 74.9% 生命耗在无收益漫游，-2.39 E/s）。
+       收窄转向使搜索轨迹方向持久，有效搜索半径大增。 */
+    if(Math.random() < 0.03) a.dir += rnd(-0.30, 0.30);
+    a.moving = 0.65;
+    ux = Math.cos(a.dir); uy = Math.sin(a.dir);
+  }
+  const sp = effSpeed(a) * a.moving;
+  a.x += ux * sp * dt;
+  a.y += uy * sp * dt;
+  /* 边界反弹（撞墙即改向，并放弃当前目标） */
+  const m = 14;
+  if(a.x < m){ a.x = m; a.dir = Math.PI - a.dir; a.target = null; }
+  else if(a.x > WW - m){ a.x = WW - m; a.dir = Math.PI - a.dir; a.target = null; }
+  if(a.y < m){ a.y = m; a.dir = -a.dir; a.target = null; }
+  else if(a.y > WH - m){ a.y = WH - m; a.dir = -a.dir; a.target = null; }
+}
+
+/* ============ 12. 取食（植物） ============ */
+function feedOnPlants(a, dt){
+  if(!a.foodKind) return;
+  const S = SPECIES[a.sp];
+  if(a.state !== 'eat'){
+    if(!a.target) return;
+    const d = Math.hypot(a.target.x - a.x, a.target.y - a.y);
+    if(d > CELL * 1.1) return;
+  }
+  /* 进食速率 ∝ 体型（而非 size^0.67）：代谢只 ∝ size^0.75，若吃得更快，
+     大动物就会「体型越大越高效」，违背 Kleiber 定律，鹿会强到无敌 */
+  const rate = S.eatRate * a.genes.size;
+  const got = eatVeg(a.x, a.y, a.foodKind, rate, dt);
+  if(got > 0){
+    /* 关键：超出能量上限的部分不能悄悄丢弃——植物已被扣走，若不记账就凭空消失。
+       实测不记账会导致守恒误差 264%。超出部分计为消化耗散。 */
+    const before = a.E;
+    a.E = Math.min(a.cap, a.E + got);
+    const wasted = got - (a.E - before);
+    if(wasted > 0) metabLoss += wasted;
+    if(flowPlant[a.sp] && flowPlant[a.sp][a.foodKind] !== undefined) flowPlant[a.sp][a.foodKind] += got;
+  } else {
+    a.target = null; a.foodKind = null;                        // 这格吃光了，重新找
+  }
+}
+
+/* ============ 13. 捕食结算 ============ */
+function resolvePredation(a, dt){
+  const S = SPECIES[a.sp];
+  if(!S.isPredator || a.digest > 0) return;
+  const reach = S.radius + 30;
+
+  /* 追捕耐力：捕食者只冲刺有限时间（成年鹿耐力好，能把狼拖垮） */
+  if(a.chaseTime > 0){
+    a.chaseTime = Math.max(0, a.chaseTime - dt);
+    if(a.chaseTime <= 0){ return; }          // 追不动了，放弃本次追捕
+  }
+  const prey = findNearest(a.x, a.y, reach, function(o){ return worthPrey(a, o); });
+  if(!prey) return;
+  const eff = S.diet[prey.sp];
+  /* 相对速度：捕食者速度×√体型 vs 猎物速度×√体型×惊逃加成 */
+  const rel = (a.genes.speed * Math.sqrt(a.genes.size)) /
+              Math.max(1, prey.genes.speed * Math.sqrt(prey.genes.size) * (prey.panic > 0 ? SPECIES[prey.sp].flee : 1));
+  /* Type III 功能反应：猎物越稀 → 捕食者越难遇到 → 低密度避难所。
+     没有这一项，捕食者必然把猎物吃绝再自己饿死（实测狐把兔从 105 吃到 0） */
+  const np = popCount[prey.sp] || 0;
+  const densityFactor = np / (np + (params.refuge || 22));
+  /* 幼体更容易得手：体型差越大，抓捕越简单 */
+  const sizeEdge = clamp(a.genes.size / Math.max(0.3, prey.genes.size), 0.6, 2.2);
+  const p = clamp(params.catchBase * eff * Math.pow(rel, 1.3) * densityFactor * sizeEdge, 0.02, 0.95);
+  if(Math.random() < clamp(p * dt * 9, 0, 0.55)){
+    /* 可视化用「理论可得」能量：捕食者吃饱时实际入账 gain 为 0，
+       但捕食事件确实发生了，否则食物网边宽会错误显示为 0 */
+    const theoretical = prey.E * CONV_E * eff;
+    const gain = killAnimal(prey, 'eaten', a);
+    if(flowAnimal[a.sp] && flowAnimal[a.sp][prey.sp] !== undefined){
+      flowAnimal[a.sp][prey.sp] += (gain > 0 ? gain : theoretical);
+    }
+    /* 消化时间 ∝ 猎物相对体型：吃虫子几乎不占时间，吃鹿要歇很久 */
+    a.digest = 1.2 + S.maturity * 0.30 * clamp(prey.genes.size / Math.max(0.2, a.genes.size), 0.25, 1.6);
+    a.state = 'wander';
+    a.target = null;
+  }
+}
+
+/* ============ 14. 死亡与分解 ============ */
+/* 个体死亡：能量按「守恒式」三分——被捕食者取走 / 回归土壤 / 分解耗散
+   返回被捕食者实际获得的能量（食物网能量流可视化用） */
+function killAnimal(a, cause, predator){
+  if(a.dead) return 0;
+
+  a.dead = true;
+  deaths[cause] = (deaths[cause] || 0) + 1;
+  if(!deathsBy[a.sp]) deathsBy[a.sp] = {};
+  deathsBy[a.sp][cause] = (deathsBy[a.sp][cause] || 0) + 1;
+  const total = a.E;
+  let toPred = 0;
+  if(predator){
+    /* 捕食者吃饱后多余的能量同样不能凭空消失：算作未取食，回归分解流程 */
+    toPred = Math.max(0, Math.min(total * CONV_E, predator.cap - predator.E));
+    predator.E += toPred;
+  }
+  /* 其余部分：一部分变成植被生物量，其余为分解热耗散 */
+  const rest = total - toPred;
+  const ret = rest * DECAY_RETURN;
+  let placed = 0;
+  const cx = clamp(Math.floor(a.x / CELL), 0, GW - 1);
+  const cy = clamp(Math.floor(a.y / CELL), 0, GH - 1);
+  const i = tIdx(cx, cy);
+  if(terrain[i] !== T_WATER){
+    const t = terrain[i];
+    const toShrub = t === T_FOREST ? 0.7 : (t === T_GRASS ? 0.35 : 0.15);
+    const wantS = ret * toShrub, wantG = ret - wantS;
+    /* 按实际接受量记账：格子已饱和时多出的能量计入耗散，保证守恒 */
+    const dS = Math.min(1, shrub[i] + wantS / SHRUB_ENERGY) - shrub[i];
+    const dG = Math.min(1, grass[i] + wantG / GRASS_ENERGY) - grass[i];
+    shrub[i] += dS; grass[i] += dG;
+    placed = dS * SHRUB_ENERGY + dG * GRASS_ENERGY;
+    vegDirty = true;
+  }
+  decayLoss += rest - placed;
+  a.E = 0;
+  return toPred;
+}
+
+/* ============ 15. 繁殖（有丝分裂 + 基因变异） ============ */
+function tryReproduce(a){
+  const S = SPECIES[a.sp];
+  if(a.age < S.maturity) return;
+  if(a.E < a.cap * a.genes.repro) return;
+  if(simTime - a.lastSplit < S.cooldown) return;
+  if(popCount[a.sp] >= S.popCap) return;                       // 分物种上限：防捕食者超调灭绝
+  const g = mutateGenes(a.sp, a.genes);
+  const child = spawnAnimal(a.sp, a.x + rnd(-16, 16), a.y + rnd(-16, 16), g, a.gen + 1);
+  const total = a.E;
+  child.E = total * 0.44;
+  a.E = total * 0.44;
+  reproLoss += total * 0.12;                                   // 繁殖代价（其余 88% 给了子代与自己）
+  a.lastSplit = simTime;
+  birthCount[a.sp]++;
+  popCount[a.sp]++;                    // 立刻计数，否则同一步内可批量冲破上限
+}
+
+/* ============ 16. 主步进 ============ */
+const popCount = {};
+for(const k of SPECIES_KEYS) popCount[k] = 0;
+/* 稳定性账本：面板显示「最近一次 20s 内是否出现过 0」与「连续存活时长」 */
+const stability = { lastMin:{}, aliveDuration:{} };
+const history = [];
+let histTimer = 0;
+const HIST_WINDOW = 120;          // 曲线窗口（秒）
+
+function sampleHistory(){
+  const row = { t: simTime, veg: totalVeg() / 1000 };
+  for(const k of SPECIES_KEYS) row[k] = popCount[k];
+  history.push(row);
+  while(history.length && simTime - history[0].t > HIST_WINDOW) history.shift();
+}
+
+function step(dt){
+  simTime += dt;
+  growVeg(dt);
+  decayFlows(dt);
+
+  /* 种群计数 */
+  for(const k of SPECIES_KEYS) popCount[k] = 0;
+  for(const a of animals) if(!a.dead) popCount[a.sp]++;
+
+  rebuildHash();
+
+  let anyDead = false;
+  for(const a of animals){
+    if(a.dead) continue;
+    a.age += dt;
+    if(a.panic > 0) a.panic = Math.max(0, a.panic - dt);
+    if(a.digest > 0) a.digest = Math.max(0, a.digest - dt);
+
+    /* 决策（错峰执行，避免同一帧全体思考造成卡顿） */
+    a.aiTimer -= dt;
+    if(a.aiTimer <= 0){
+      a.aiTimer = AI_INTERVAL * rnd(0.65, 1.35);
+      think(a);
+    }
+
+    /* 追捕耐力倒计时（不在捕食结算里扣，避免重复扣减） */
+    if(a.state === 'chase' && a.chaseCooldown <= 0){ /* 耐力在 resolvePredation 内消耗 */ }
+
+    moveAnimal(a, dt);
+    feedOnPlants(a, dt);
+    resolvePredation(a, dt);
+
+    /* 代谢耗散 */
+    const cost = metabolism(a) * dt;
+    a.E -= cost;
+    metabLoss += cost;
+
+    /* 死亡判定 */
+    if(a.age > a.lifespan){ killAnimal(a, 'aged'); anyDead = true; }
+    else if(a.E <= 0){ a.E = 0; killAnimal(a, 'starved'); anyDead = true; }
+    else tryReproduce(a);
+
+    if(popCount[a.sp] > maxPop[a.sp]) maxPop[a.sp] = popCount[a.sp];
+  }
+  if(anyDead) animals = animals.filter(a => !a.dead);
+
+  /* 稳定性窗口：每 20s 结算一次「近 20s 最小值」，用于判断长期共存与灭绝 */
+  for(const k of SPECIES_KEYS){
+    if(minPopWindow[k] === undefined || popCount[k] < minPopWindow[k]) minPopWindow[k] = popCount[k];
+  }
+  windowTimer += dt;
+  if(windowTimer >= 20){
+    windowTimer = 0;
+    stability.lastMin = minPopWindow;
+    minPopWindow = {};
+    for(const k of SPECIES_KEYS){
+      const v = stability.lastMin[k];
+        /* 连续存活时长：灭绝窗口出现（v===0）必须归零，否则计数器永久冻结 */
+        if(v > 0) stability.aliveDuration[k] = (stability.aliveDuration[k] || 0) + 20;
+        else stability.aliveDuration[k] = 0;
+    }
+  }
+
+  /* 采样种群曲线（每 0.5s 一条）。
+     之前这里漏了调用 —— sampleHistory 只在 resetWorld 里被调过一次，
+     导致 history.length 永远是 1，侧栏「近 120s」曲线全程空白。 */
+  histTimer += dt;
+  if(histTimer >= 0.5){ histTimer = 0; sampleHistory(); }
+}
+
+/* 连续推进 n 秒（测试与快速预热用） */
+function runFor(seconds){
+  const n = Math.round(seconds / SIM_DT);
+  for(let i = 0; i < n; i++) step(SIM_DT);
+}
+
+/* ============ 16b. 能量流（食物网可视化用） ============ */
+const flowAnimal = {};        // [捕食者][猎物] ≈ 近期每秒获能
+const flowPlant  = {};        // [草食者][植被] ≈ 近期每秒获能
+function initFlows(){
+  for(const k of SPECIES_KEYS){
+    flowAnimal[k] = {}; flowPlant[k] = {};
+    for(const p of SPECIES_KEYS) flowAnimal[k][p] = 0;
+    flowPlant[k].grass = 0; flowPlant[k].shrub = 0;
+  }
+}
+let flowDecayTimer = 0;
+function decayFlows(dt){
+  flowDecayTimer += dt;
+  if(flowDecayTimer < 1) return;
+  flowDecayTimer = 0;
+  for(const k in flowAnimal){ const row = flowAnimal[k]; for(const p in row) row[p] *= 0.5; }
+  for(const k in flowPlant){ const row = flowPlant[k]; for(const p in row) row[p] *= 0.5; }
+}
+
+/* ============ 17. 季节外观 ============ */
+/* 季节名称必须与 seasonGrowthMul 的曲线对齐：
+   相位 0=春 0.25=夏 0.5=秋 0.75=冬（原来边界整体错开一季度，
+   导致 0.5 处报"夏"而生长倍率已是秋值 0.55） */
+function seasonInfo(){
+  const ph = seasonPhase();
+  /* 用 +ε 容差取整到最近的季节边界，避免浮点误差把 ph=0.5 判成上一季 */
+  const q = Math.floor((ph + 1e-6) * 4) % 4;
+  if(q === 0) return { n:'春', e:'🌱', tint:'rgba(110,220,140,1)', mul:1.02 };
+  if(q === 1) return { n:'夏', e:'☀️', tint:'rgba(235,220,130,1)', mul:1.12 };
+  if(q === 2) return { n:'秋', e:'🍂', tint:'rgba(230,150,70,1)',  mul:0.92 };
+  return          { n:'冬', e:'❄️', tint:'rgba(150,200,240,1)', mul:0.78 };
+}
+
+/* ============ 18. 地形贴图（低分辨率超采样） ============ */
+const scene = document.getElementById('scene');
+const sctx = scene.getContext('2d');
+const VS = 3;                                    // 超采样倍数
+const mapW = GW * VS, mapH = GH * VS;
+let mapCv = null, mapCtx = null, mapImg = null;
+try {
+  mapCv = document.createElement('canvas');
+  mapCv.width = mapW; mapCv.height = mapH;
+  mapCtx = mapCv.getContext('2d');
+  mapImg = mapCtx.createImageData(mapW, mapH);
+} catch(e){ mapCv = null; }
+let mapDirty = true, mapTimer = 0;
+
+function rebuildMap(){
+  if(!mapImg) return;
+  const d = mapImg.data;
+  const mul = seasonInfo().mul;
+  for(let cy = 0; cy < GH; cy++){
+    for(let cx = 0; cx < GW; cx++){
+      const i = tIdx(cx, cy);
+      const base = TERRAIN_COLOR[terrain[i]];
+      const gv = grass[i], sv = shrub[i];
+      let r = base[0] + gv * 28 * mul + sv * 10 * mul;
+      let g = base[1] + gv * 64 * mul + sv * 44 * mul;
+      let b = base[2] + gv * 20 * mul + sv * 16 * mul;
+      if(r > 255) r = 255; if(g > 255) g = 255; if(b > 255) b = 255;
+      for(let py = 0; py < VS; py++){
+        let o = ((cy * VS + py) * mapW + cx * VS) * 4;
+        for(let px = 0; px < VS; px++){
+          d[o] = r; d[o+1] = g; d[o+2] = b; d[o+3] = 255; o += 4;
+        }
+      }
+    }
+  }
+  mapCtx.putImageData(mapImg, 0, 0);
+}
+
+/* ============ 19. 视图自适应 ============ */
+let view = { s: 1, ox: 0, oy: 0, dpr: 1 };
+function resizeScene(){
+  const host = scene.parentElement;
+  if(!host) return;
+  const dpr = Math.min((typeof window !== 'undefined' && window.devicePixelRatio) || 1, 2);
+  const w = host.clientWidth || WW, h = host.clientHeight || WH;
+  scene.width = Math.max(1, Math.floor(w * dpr));
+  scene.height = Math.max(1, Math.floor(h * dpr));
+  const s = Math.min(w / WW, h / WH);
+  view.dpr = dpr;
+  view.s = s * dpr;
+  view.ox = (scene.width - WW * view.s) / 2;
+  view.oy = (scene.height - WH * view.s) / 2;
+}
+function screenToWorld(clientX, clientY){
+  const rect = scene.getBoundingClientRect();
+  const x = (clientX - rect.left) * view.dpr;
+  const y = (clientY - rect.top) * view.dpr;
+  return { x: (x - view.ox) / view.s, y: (y - view.oy) / view.s };
+}
+
+/* ============ 20. 绘制个体 ============ */
+let highlightSp = null;        // 高亮某物种时，其余降透明度
+function drawAnimal(a){
+  const S = SPECIES[a.sp];
+  const dim = highlightSp && highlightSp !== a.sp;
+  const sizeRatio = clamp(a.genes.size / S.genes.size.init, 0.55, 1.7);
+  const r = S.radius * sizeRatio;
+  const juvenile = a.age < S.maturity;
+
+  sctx.globalAlpha = dim ? 0.18 : (juvenile ? 0.72 : 1);
+
+  /* 捕食者光晕 */
+  if(S.isPredator && !dim){
+    sctx.beginPath();
+    sctx.arc(a.x, a.y, r * 1.9, 0, 6.2832);
+    sctx.fillStyle = S.color + '18';
+    sctx.fill();
+  }
+  /* 惊逃圈 */
+  if(a.panic > 0 && !dim){
+    sctx.beginPath();
+    sctx.arc(a.x, a.y, r + 4.5, 0, 6.2832);
+    sctx.strokeStyle = 'rgba(224,92,92,.75)';
+    sctx.lineWidth = 1.4;
+    sctx.stroke();
+  }
+  /* 身体 */
+  sctx.beginPath();
+  sctx.arc(a.x, a.y, r, 0, 6.2832);
+  sctx.fillStyle = S.color;
+  sctx.fill();
+  /* 朝向小尖角 */
+  if(r > 3.2){
+    sctx.beginPath();
+    sctx.moveTo(a.x + Math.cos(a.dir) * r * 1.25, a.y + Math.sin(a.dir) * r * 1.25);
+    sctx.lineTo(a.x + Math.cos(a.dir + 2.4) * r * 0.75, a.y + Math.sin(a.dir + 2.4) * r * 0.75);
+    sctx.lineTo(a.x + Math.cos(a.dir - 2.4) * r * 0.75, a.y + Math.sin(a.dir - 2.4) * r * 0.75);
+    sctx.closePath();
+    sctx.fillStyle = S.color;
+    sctx.fill();
+  }
+  /* 消化中标记 */
+  if(a.digest > 0 && !dim && r > 4){
+    sctx.beginPath();
+    sctx.arc(a.x, a.y, r * 0.32, 0, 6.2832);
+    sctx.fillStyle = 'rgba(20,26,32,.65)';
+    sctx.fill();
+  }
+  sctx.globalAlpha = 1;
+}
+
+/* ============ 21. 主渲染 ============ */
+function render(){
+  if(!sctx) return;
+  if(mapDirty || vegDirty){ rebuildMap(); mapDirty = false; vegDirty = false; }
+
+  sctx.setTransform(1, 0, 0, 1, 0, 0);
+  sctx.fillStyle = '#070a0d';
+  sctx.fillRect(0, 0, scene.width, scene.height);
+
+  sctx.setTransform(view.s, 0, 0, view.s, view.ox, view.oy);
+  if(mapCv) sctx.drawImage(mapCv, 0, 0, mapW, mapH, 0, 0, WW, WH);
+
+  /* 季节色调叠加 */
+  const si = seasonInfo();
+  sctx.globalAlpha = 0.085;
+  sctx.fillStyle = si.tint;
+  sctx.fillRect(0, 0, WW, WH);
+  sctx.globalAlpha = 1;
+
+  /* 个体 */
+  for(const a of animals) drawAnimal(a);
+
+  /* 世界边界 */
+  sctx.strokeStyle = 'rgba(255,255,255,.07)';
+  sctx.lineWidth = 3;
+  sctx.strokeRect(0, 0, WW, WH);
+}
+
+/* ============ 22. UI 引用 ============ */
+function el(id){ return document.getElementById(id); }
+const ui = {
+  play: el('btnPlay'), stepBtn: el('btnStep'), reset: el('btnReset'), speed: el('selSpeed'),
+  spawnGroup: el('spawnGroup'), toolGroup: el('toolGroup'), preset: el('selPreset'),
+  chart: el('chart'), web: el('web'), stats: el('statsTable'), ledger: el('ledger'), clim: el('clim'),
+  hudTime: el('hudTime'), hudYear: el('hudYear'), hudSeason: el('hudSeason'), hudFps: el('hudFps'),
+  tip: el('tip'), hint: el('hint'), chartNote: el('chartNote'),
+};
+const chartCtx = ui.chart ? ui.chart.getContext('2d') : null;
+const webCtx = ui.web ? ui.web.getContext('2d') : null;
+
+/* ============ 23. 预设场景 ============ */
+const PRESETS = {
+  classic: { name:'🌾 经典草原（均衡）', rain:1.0, temp:1.0, yearLen:120, veg:0.55,
+             stocks:{ insect:110, rabbit:70, deer:20, bird:14, fox:7, wolf:5 } },
+  nowolf:  { name:'⚖️ 无狼世界（看级联）', rain:1.0, temp:1.0, yearLen:120, veg:0.55,
+             stocks:{ insect:110, rabbit:70, deer:26, bird:14, fox:7, wolf:0 } },
+  drought: { name:'🏜️ 干旱之年', rain:0.45, temp:1.1, yearLen:140, veg:0.32,
+             stocks:{ insect:70, rabbit:42, deer:12, bird:8, fox:5, wolf:3 } },
+  boom:    { name:'🌧️ 丰饶之地', rain:1.65, temp:1.05, yearLen:110, veg:0.72,
+             stocks:{ insect:170, rabbit:95, deer:32, bird:22, fox:11, wolf:8 } },
+  overgraze:{ name:'🐇 兔满为患（无天敌）', rain:1.15, temp:1.0, yearLen:120, veg:0.7,
+             stocks:{ insect:150, rabbit:170, deer:6, bird:6, fox:0, wolf:0 } },
+  empty:   { name:'🪨 空白世界（只有植物）', rain:1.0, temp:1.0, yearLen:120, veg:0.6, stocks:{} },
+};
+let currentPreset = 'classic';
+
+/* ============ 24. 滑条 ============ */
+const SLIDERS = [
+  { k:'rain',      n:'降雨',     min:0.2, max:2.0, step:0.05 },
+  { k:'temp',      n:'温度',     min:0.5, max:1.6, step:0.05 },
+  { k:'yearLen',   n:'四季周期', min:30,  max:600, step:10 },
+  { k:'mutP',      n:'变异率',   min:0,   max:0.5, step:0.01 },
+  { k:'metabK',    n:'代谢系数', min:0.4, max:2.0, step:0.05 },
+  { k:'vegK',      n:'生产力',   min:0.4, max:2.5, step:0.05 },
+  { k:'catchBase', n:'捕获率',   min:0.1, max:1.0, step:0.05 },
+  { k:'refuge',    n:'低密度避难', min:4,  max:80,  step:2 },
+];
+const sliderRefs = {};
+function fmtSlider(d, v){
+  if(d.k === 'mutP') return (v * 100).toFixed(0) + '%';
+  if(d.k === 'yearLen') return v.toFixed(0) + 's';
+  if(d.k === 'refuge') return v.toFixed(0);
+  return (typeof v === 'number' ? v : 0).toFixed(2);
+}
+function buildSliders(){
+  if(!ui.clim) return;
+  let s = '';
+  for(const d of SLIDERS){
+    s += '<div class="slider"><label>' + d.n + '</label>' +
+         '<input type="range" id="sl_' + d.k + '" min="' + d.min + '" max="' + d.max + '" step="' + d.step + '">' +
+         '<span class="val" id="slv_' + d.k + '"></span></div>';
+  }
+  ui.clim.innerHTML = s;
+  for(const d of SLIDERS){
+    const inp = el('sl_' + d.k), lab = el('slv_' + d.k);
+    sliderRefs[d.k] = { inp, lab, d };
+    if(inp){
+      inp.value = params[d.k];
+      inp.addEventListener('input', function(){
+        const v = parseFloat(inp.value);
+        if(isFinite(v)) params[d.k] = v;
+        if(lab) lab.textContent = fmtSlider(d, params[d.k]);
+      });
+    }
+    if(lab) lab.textContent = fmtSlider(d, params[d.k]);
+  }
+}
+function syncSliders(){
+  for(const d of SLIDERS){
+    const r = sliderRefs[d.k];
+    if(!r) continue;
+    if(r.inp) r.inp.value = params[d.k];
+    if(r.lab) r.lab.textContent = fmtSlider(d, params[d.k]);
+  }
+}
+
+/* ============ 25. 工具与投放 ============ */
+let tool = 'spawn';
+let selectedSp = 'rabbit';
+const TOOLS = [
+  { k:'spawn', n:'投放', i:'＋' },
+  { k:'hunt',  n:'猎杀', i:'🎯' },
+  { k:'fire',  n:'放火', i:'🔥' },
+  { k:'rain',  n:'浇灌', i:'💧' },
+];
+function chipsHtml(){
+  let s = '';
+  for(const k of SPECIES_KEYS){
+    const S = SPECIES[k];
+    s += '<div class="chip' + (tool === 'spawn' && selectedSp === k ? ' on' : '') +
+         '" data-sp="' + k + '">' + S.emoji + ' ' + S.name + '</div>';
+  }
+  return s;
+}
+function toolsHtml(){
+  let s = '';
+  for(const t of TOOLS){
+    s += '<div class="chip' + (tool === t.k ? ' on' : '') + '" data-tool="' + t.k + '">' +
+         t.i + ' ' + t.n + '</div>';
+  }
+  return s;
+}
+function refreshChips(){
+  if(ui.spawnGroup) ui.spawnGroup.innerHTML = chipsHtml();
+  if(ui.toolGroup) ui.toolGroup.innerHTML = toolsHtml();
+  if(ui.tip){
+    if(tool === 'spawn') ui.tip.textContent = '点击画布投放 ' + SPECIES[selectedSp].emoji + SPECIES[selectedSp].name +
+      ' · 空格暂停 · R 重置';
+    else if(tool === 'hunt') ui.tip.textContent = '点击/拖动猎杀 ' + SPECIES[selectedSp].emoji + SPECIES[selectedSp].name +
+      '（先选物种，再猎杀 → 观察级联）';
+    else if(tool === 'fire') ui.tip.textContent = '🔥 点击/拖动放火：烧毁植被并烧死动物';
+    else ui.tip.textContent = '💧 点击/拖动浇灌：局部植被迅速恢复';
+  }
+}
+let toastTimer = null;
+function toast(msg){
+  if(!ui.hint) return;
+  ui.hint.textContent = msg;
+  if(ui.hint.classList) ui.hint.classList.add('show');
+  if(typeof setTimeout === 'function'){
+    if(toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){
+      if(ui.hint && ui.hint.classList) ui.hint.classList.remove('show');
+    }, 1500);
+  }
+}
+
+function randomSpawnPos(sp){
+  const H = HABITAT[sp];
+  for(let i = 0; i < 60; i++){
+    const x = rnd(30, WW - 30), y = rnd(30, WH - 30);
+    if((H[terrainAt(x, y)] || 0) >= 0.85) return { x, y };
+  }
+  return { x: rnd(30, WW - 30), y: rnd(30, WH - 30) };
+}
+
+function applyTool(wx, wy){
+  if(!(wx >= 0 && wy >= 0 && wx <= WW && wy <= WH)) return;
+  /* 工具依赖空间哈希查邻居，而哈希只在 step() 里重建。
+     暂停时哈希是空的 → 放火/猎杀会静默失效（实测点 10 只兔一只都不掉）。
+     所以每次使用工具前先重建。 */
+  rebuildHash();
+  const S = SPECIES[selectedSp];
+  if(tool === 'spawn'){
+    for(let i = 0; i < 6; i++){
+      const a = spawnAnimal(selectedSp, clamp(wx + rnd(-22, 22), 15, WW - 15), clamp(wy + rnd(-22, 22), 15, WH - 15));
+      a.age = S.maturity * rnd(0.8, 1.1);
+      a.E = a.cap * 0.75;
+    }
+    toast('投放 ' + S.emoji + S.name + ' ×6');
+  } else if(tool === 'hunt'){
+    let n = 0;
+    forEachNear(wx, wy, 62, function(a){ if(a.sp === selectedSp){ killAnimal(a, 'hunted'); n++; } });
+    if(n){ animals = animals.filter(function(a){ return !a.dead; }); }
+    toast('猎杀 ' + S.emoji + S.name + ' ×' + n);
+  } else if(tool === 'fire'){
+    burnArea(wx, wy, 80);
+    toast('🔥 过火：植被烧毁，动物大量死亡');
+  } else if(tool === 'rain'){
+    irrigate(wx, wy, 95);
+    toast('💧 浇灌：局部植被迅速恢复');
+  }
+}
+
+function burnArea(x, y, r){
+  rebuildHash();                 // 保证 forEachNear 有新鲜哈希（暂停时也可用）
+  const r2 = r * r;
+  for(let cy = Math.max(0, Math.floor((y - r) / CELL)); cy <= Math.min(GH - 1, Math.floor((y + r) / CELL)); cy++){
+    for(let cx = Math.max(0, Math.floor((x - r) / CELL)); cx <= Math.min(GW - 1, Math.floor((x + r) / CELL)); cx++){
+      const dx = cx * CELL + CELL / 2 - x, dy = cy * CELL + CELL / 2 - y;
+      if(dx * dx + dy * dy > r2) continue;
+      const i = tIdx(cx, cy);
+      grass[i] *= 0.05;
+      shrub[i] *= 0.05;
+    }
+  }
+  let n = 0;
+  forEachNear(x, y, r, function(a){ if(Math.random() < 0.85){ killAnimal(a, 'fire'); n++; } });
+  if(n) animals = animals.filter(function(a){ return !a.dead; });
+  vegDirty = true; mapDirty = true;
+}
+
+function irrigate(x, y, r){
+  rebuildHash();
+  const r2 = r * r;
+  for(let cy = Math.max(0, Math.floor((y - r) / CELL)); cy <= Math.min(GH - 1, Math.floor((y + r) / CELL)); cy++){
+    for(let cx = Math.max(0, Math.floor((x - r) / CELL)); cx <= Math.min(GW - 1, Math.floor((x + r) / CELL)); cx++){
+      const dx = cx * CELL + CELL / 2 - x, dy = cy * CELL + CELL / 2 - y;
+      if(dx * dx + dy * dy > r2) continue;
+      const i = tIdx(cx, cy);
+      if(terrain[i] === T_WATER) continue;
+      if(grass[i] < 0.78) grass[i] = 0.78;
+      if(shrub[i] < 0.6) shrub[i] = 0.6;
+    }
+  }
+  vegDirty = true; mapDirty = true;
+}
+
+/* ============ 26. 面板绘制 ============ */
+function drawChart(){
+  const c = ui.chart;
+  if(!c || !chartCtx) return;
+  const dpr = view.dpr || 1;
+  const w = c.clientWidth || 300, h = c.clientHeight || 120;
+  const W = Math.max(1, Math.floor(w * dpr)), H = Math.max(1, Math.floor(h * dpr));
+  if(c.width !== W || c.height !== H){ c.width = W; c.height = H; }
+  const ctx = chartCtx;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+
+  ctx.strokeStyle = 'rgba(255,255,255,.07)';
+  ctx.lineWidth = 1;
+  for(let i = 1; i < 4; i++){
+    const y = H * i / 4;
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+  if(history.length < 2) return;
+
+  let maxV = 14;
+  for(const row of history) for(const k of SPECIES_KEYS) if(row[k] > maxV) maxV = row[k];
+  maxV *= 1.15;
+  const tEnd = simTime;
+  for(const k of SPECIES_KEYS){
+    ctx.beginPath();
+    let started = false;
+    for(const row of history){
+      const x = (1 - (tEnd - row.t) / HIST_WINDOW) * W;
+      if(x < -3) continue;
+      const y = H - (row[k] / maxV) * H;
+      if(!started){ ctx.moveTo(clamp(x, 0, W), y); started = true; }
+      else ctx.lineTo(clamp(x, 0, W), y);
+    }
+    ctx.strokeStyle = SPECIES[k].color;
+    ctx.lineWidth = Math.max(1.4, 1.2 * dpr);
+    ctx.stroke();
+  }
+  ctx.fillStyle = 'rgba(255,255,255,.35)';
+  ctx.font = Math.round(10 * dpr) + 'px sans-serif';
+  ctx.fillText(String(Math.round(maxV)), 4, 11 * dpr);
+}
+
+const WEB_POS = {
+  grass:{x:0.19,y:0.87}, shrub:{x:0.58,y:0.87},
+  insect:{x:0.10,y:0.57}, rabbit:{x:0.37,y:0.57}, deer:{x:0.80,y:0.57},
+  bird:{x:0.19,y:0.28}, fox:{x:0.63,y:0.28},
+  wolf:{x:0.44,y:0.06},
+};
+const NODE_META = {
+  grass:{ name:'草',  color:'#5fa85f' },
+  shrub:{ name:'灌木', color:'#3f7f4f' },
+};
+for(const k of SPECIES_KEYS) NODE_META[k] = { name: SPECIES[k].name, color: SPECIES[k].color };
+
+function nodeMass(k){
+  if(k === 'grass' || k === 'shrub'){
+    const arr = k === 'grass' ? grass : shrub;
+    let s = 0;
+    for(let i = 0; i < arr.length; i++) s += arr[i];
+    return s / 100;
+  }
+  return popCount[k] || 0;
+}
+
+function drawWeb(){
+  const c = ui.web;
+  if(!c || !webCtx) return;
+  const dpr = view.dpr || 1;
+  const w = c.clientWidth || 300, h = c.clientHeight || 170;
+  const W = Math.max(1, Math.floor(w * dpr)), H = Math.max(1, Math.floor(h * dpr));
+  if(c.width !== W || c.height !== H){ c.width = W; c.height = H; }
+  const ctx = webCtx;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+
+  /* 能量流边 */
+  for(const sp of SPECIES_KEYS){
+    const p = WEB_POS[sp];
+    if(!p) continue;
+    for(const food of Object.keys(SPECIES[sp].diet)){
+      const q = WEB_POS[food];
+      if(!q) continue;
+      let flow = 0;
+      if(SPECIES[food]) flow = (flowAnimal[sp] && flowAnimal[sp][food]) || 0;
+      else flow = (flowPlant[sp] && flowPlant[sp][food]) || 0;
+      ctx.beginPath();
+      ctx.moveTo(q.x * W, q.y * H);
+      ctx.lineTo(p.x * W, p.y * H);
+      ctx.strokeStyle = SPECIES[sp].color + '66';
+      ctx.lineWidth = clamp(0.6 + flow / 30, 0.6, 5.5) * dpr;
+      ctx.stroke();
+    }
+  }
+  /* 节点 */
+  for(const k in WEB_POS){
+    const p = WEB_POS[k], m = nodeMass(k);
+    const r = clamp(4 + Math.log(1 + m) * 2.0, 4, 14) * dpr;
+    const meta = NODE_META[k] || { name:k, color:'#888' };
+    ctx.beginPath();
+    ctx.arc(p.x * W, p.y * H, r, 0, 6.2832);
+    ctx.fillStyle = m > 0.5 ? meta.color : meta.color + '44';
+    ctx.fill();
+    ctx.fillStyle = m > 0.5 ? 'rgba(255,255,255,.82)' : 'rgba(255,255,255,.3)';
+    ctx.font = Math.round(9.5 * dpr) + 'px sans-serif';
+    ctx.fillText(meta.name, p.x * W - r, p.y * H - r - 3 * dpr);
+  }
+}
+
+function updateStats(){
+  if(!ui.stats) return;
+  const agg = {};
+  for(const k of SPECIES_KEYS) agg[k] = { n:0, E:0, size:0, speed:0 };
+  for(const a of animals){
+    if(a.dead) continue;
+    const g = agg[a.sp];
+    if(!g) continue;
+    g.n++; g.E += a.E; g.size += a.genes.size; g.speed += a.genes.speed;
+  }
+  let html = '<tr><th>物种</th><th>数量</th><th>均能</th><th>体型</th><th>速度</th><th>世代</th><th>出生</th></tr>';
+  for(const k of SPECIES_KEYS){
+    const S = SPECIES[k], g = agg[k];
+    const n = g.n;
+    const avg = function(x){ return n ? (x / n) : 0; };
+    const initS = S.genes.size.init;
+    const dSize = n ? (avg(g.size) / initS - 1) * 100 : 0;
+    html += '<tr class="' + (n === 0 ? 'dead' : '') + '">' +
+      '<td><span class="swatch" style="background:' + S.color + '"></span>' + S.emoji + ' ' + S.name + '</td>' +
+      '<td>' + n + '</td>' +
+      '<td>' + (n ? avg(g.E).toFixed(0) : '—') + '</td>' +
+      '<td>' + (n ? avg(g.size).toFixed(2) + ' <em style="color:#5d6b78;font-style:normal">(' + (dSize >= 0 ? '+' : '') + dSize.toFixed(0) + '%)</em>' : '—') + '</td>' +
+      '<td>' + (n ? avg(g.speed).toFixed(0) : '—') + '</td>' +
+      '<td>' + generationMax[k] + '</td>' +
+      '<td>' + birthCount[k] + '</td>' +
+      '</tr>';
+  }
+  ui.stats.innerHTML = html;
+}
+
+function updateLedger(){
+  if(!ui.ledger) return;
+  const pe = plantEnergy(), ae = animalEnergy();
+  const d = deaths;
+  ui.ledger.innerHTML =
+    '<span>光合输入</span><b class="pos">+' + photosynthesis.toFixed(0) + '</b>' +
+    '<span>植物总能量</span><b>' + pe.toFixed(0) + '</b>' +
+    '<span>动物总能量</span><b>' + ae.toFixed(0) + '</b>' +
+    '<span>系统总量</span><b>' + (pe + ae).toFixed(0) + '</b>' +
+    '<span>代谢耗散</span><b class="neg">-' + metabLoss.toFixed(0) + '</b>' +
+    '<span>分解耗散</span><b class="neg">-' + decayLoss.toFixed(0) + '</b>' +
+    '<span>繁殖耗散</span><b class="neg">-' + reproLoss.toFixed(0) + '</b>' +
+    '<span>死亡：饿/被吃/老/猎杀/火</span><b>' + (d.starved||0) + ' / ' + (d.eaten||0) + ' / ' + (d.aged||0) + ' / ' + (d.hunted||0) + ' / ' + (d.fire||0) + '</b>' +
+    '<span>地形（草原/森林/荒漠/水）</span><b>' + terrainCount[1] + ' / ' + terrainCount[2] + ' / ' + terrainCount[3] + ' / ' + terrainCount[0] + '</b>';
+}
+
+function updateAllPanels(){
+  drawChart(); drawWeb(); updateStats(); updateLedger();
+}
+
+/* ============ 27. 重置世界 ============ */
+function resetWorld(key){
+  currentPreset = PRESETS[key] ? key : 'classic';
+  const P = PRESETS[currentPreset];
+  params.rain = P.rain; params.temp = P.temp; params.yearLen = P.yearLen;
+
+  genTerrain();
+  seedVeg(P.veg);
+
+  animals = []; nextId = 1; simTime = 0; growTimer = 0; histTimer = 0; flowDecayTimer = 0;
+  history.length = 0;
+  photosynthesis = 0; metabLoss = 0; decayLoss = 0; reproLoss = 0;
+  deaths = { starved:0, eaten:0, aged:0, hunted:0, fire:0 };
+  deathsBy = {};
+  minPopWindow = {}; windowTimer = 0;
+  stability.lastMin = {}; stability.aliveDuration = {};
+  for(const k of SPECIES_KEYS){ generationMax[k] = 1; birthCount[k] = 0; maxPop[k] = 0; popCount[k] = 0; deathsBy[k] = {}; }
+  initFlows();
+
+  for(const k in P.stocks){
+    const S = SPECIES[k];
+    if(!S) continue;
+    for(let i = 0; i < P.stocks[k]; i++){
+      const p = randomSpawnPos(k);
+      const a = spawnAnimal(k, p.x, p.y, undefined, 1);
+      a.age = S.maturity * rnd(1.0, 2.4);        // 开局都是成年个体
+      a.E = a.cap * rnd(0.62, 0.92);
+    }
+  }
+  mapDirty = true; vegDirty = true;
+  syncSliders();
+  rebuildHash();
+  sampleHistory();
+  updateAllPanels();
+  if(ui.preset) ui.preset.value = currentPreset;
+  return P;
+}
+function applyPreset(k){ resetWorld(k); toast('切换场景：' + PRESETS[currentPreset].name); }
+
+/* ============ 28. 主循环 ============ */
+let running = false;
+let speed = 1;
+let lastT = 0, acc = 0;
+let fpsAcc = 0, fpsFrames = 0, fpsValue = 60, uiTimer = 0;
+
+function setRunning(v){
+  running = !!v;
+  if(ui.play) ui.play.textContent = running ? '⏸ 暂停' : '▶ 开始';
+}
+function nowMs(){
+  if(typeof performance !== 'undefined' && performance.now) return performance.now();
+  return Date.now();
+}
+
+function frame(ts){
+  if(typeof requestAnimationFrame === 'function') requestAnimationFrame(frame);
+  const now = nowMs();
+  let dt = (now - lastT) / 1000;
+  lastT = now;
+  if(!isFinite(dt) || dt < 0) dt = 0;
+  if(dt > 0.25) dt = 0.25;
+
+  if(running){
+    acc += dt * speed;
+    let n = 0;
+    while(acc >= SIM_DT && n < 300){ step(SIM_DT); acc -= SIM_DT; n++; }
+    if(n >= 300) acc = 0;                     // 追不上就丢弃积压，避免"死亡螺旋"
+  }
+  render();
+
+  /* HUD 与面板节流更新 */
+  fpsAcc += dt; fpsFrames++;
+  if(fpsAcc >= 0.5){
+    fpsValue = fpsFrames / fpsAcc; fpsAcc = 0; fpsFrames = 0;
+    if(ui.hudFps) ui.hudFps.textContent = fpsValue.toFixed(0);
+  }
+  if(ui.hudTime) ui.hudTime.textContent = simTime.toFixed(0) + 's';
+  if(ui.hudYear) ui.hudYear.textContent = String(Math.floor(simTime / params.yearLen) + 1);
+  if(ui.hudSeason){
+    const si = seasonInfo();
+    ui.hudSeason.textContent = si.e + ' ' + si.n;
+  }
+  uiTimer += dt;
+  if(uiTimer >= 0.45){ uiTimer = 0; updateAllPanels(); }
+}
+
+/* ============ 29. 事件绑定 ============ */
+function bindUI(){
+  if(ui.play) ui.play.addEventListener('click', function(){ setRunning(!running); });
+  if(ui.stepBtn) ui.stepBtn.addEventListener('click', function(){ setRunning(false); step(SIM_DT); render(); updateAllPanels(); });
+  if(ui.reset) ui.reset.addEventListener('click', function(){ resetWorld(currentPreset); });
+  if(ui.speed) ui.speed.addEventListener('change', function(){
+    const v = parseFloat(ui.speed.value);
+    if(isFinite(v) && v > 0) speed = v;
+  });
+  if(ui.preset) ui.preset.addEventListener('change', function(){ applyPreset(ui.preset.value); });
+  if(ui.spawnGroup) ui.spawnGroup.addEventListener('click', function(e){
+    const t = e.target && e.target.closest ? e.target.closest('.chip') : null;
+    if(!t || !t.dataset) return;
+    selectedSp = t.dataset.sp;
+    tool = 'spawn';
+    refreshChips();
+  });
+  if(ui.toolGroup) ui.toolGroup.addEventListener('click', function(e){
+    const t = e.target && e.target.closest ? e.target.closest('.chip') : null;
+    if(!t || !t.dataset) return;
+    tool = t.dataset.tool;
+    refreshChips();
+  });
+
+  /* 画布交互 */
+  if(scene && scene.addEventListener){
+    let painting = false, lastPaint = 0;
+    const paint = function(e){
+      const p = screenToWorld(e.clientX, e.clientY);
+      applyTool(p.x, p.y);
+    };
+    scene.addEventListener('pointerdown', function(e){ painting = true; paint(e); });
+    scene.addEventListener('pointermove', function(e){
+      if(!painting || tool === 'spawn') return;
+      const now = nowMs();
+      if(now - lastPaint < 95) return;
+      lastPaint = now; paint(e);
+    });
+    const stop = function(){ painting = false; };
+    scene.addEventListener('pointerup', stop);
+    scene.addEventListener('pointerleave', stop);
+    if(typeof window !== 'undefined' && window.addEventListener) window.addEventListener('pointerup', stop);
+    scene.addEventListener('contextmenu', function(e){ if(e.preventDefault) e.preventDefault(); });
+  }
+
+  /* 键盘 */
+  if(typeof window !== 'undefined' && window.addEventListener){
+    window.addEventListener('keydown', function(e){
+      const k = e.key;
+      if(k === ' '){ if(e.preventDefault) e.preventDefault(); setRunning(!running); }
+      else if(k === 'r' || k === 'R'){ resetWorld(currentPreset); }
+      else if(k >= '1' && k <= '6'){
+        const idx = parseInt(k, 10) - 1;
+        if(SPECIES_KEYS[idx]){ selectedSp = SPECIES_KEYS[idx]; tool = 'spawn'; refreshChips(); }
+      }
+    });
+    /* 尺寸自适应 */
+    window.addEventListener('resize', function(){ resizeScene(); });
+    if(typeof ResizeObserver !== 'undefined'){
+      try { new ResizeObserver(function(){ resizeScene(); }).observe(scene.parentElement); } catch(err){}
+    }
+  }
+}
+
+/* ============ 30. 启动 ============ */
+function init(){
+  try {
+    resizeScene();
+    buildSliders();
+    let s = '';
+    for(const k in PRESETS) s += '<option value="' + k + '">' + PRESETS[k].name + '</option>';
+    if(ui.preset) ui.preset.innerHTML = s;
+    refreshChips();
+    bindUI();
+    resetWorld('classic');
+    setRunning(false);
+  } catch(err){
+    if(typeof console !== 'undefined' && console.error) console.error('init 失败：', err);
+  }
+}
+init();
+
+/* 启动渲染循环 */
+if(typeof requestAnimationFrame === 'function'){
+  lastT = nowMs();
+  requestAnimationFrame(frame);
+}
+
+/* ============ 31. 测试导出（供 test.mjs 直接驱动引擎） ============ */
+globalThis.__E = {
+  /* 模拟 */
+  step, runFor, resetWorld, applyPreset, PRESETS,
+  /* 个体 */
+  spawnAnimal, killAnimal, tryReproduce, think, metabolism, effSpeed, canPrey,
+  moveAnimal, feedOnPlants, resolvePredation, energyCap, econOf,
+  burnArea, irrigate, applyTool, randomSpawnPos, sampleHistory, render, resizeScene,
+  /* 基因 */
+  mutateGenes, initGenes, SPECIES, SPECIES_KEYS, HABITAT,
+  /* 植被与地形 */
+  eatVeg, growVeg, seedVeg, findBestVeg, genTerrain, terrainAt, totalVeg,
+  seasonPhase, seasonGrowthMul, seasonInfo,
+  /* 能量账本 */
+  plantEnergy, animalEnergy, totalSystemE, initFlows,
+  /* 常量 */
+  WW, WH, CELL, GW, GH, SIM_DT, HASH_CELL,
+  T_WATER, T_GRASS, T_FOREST, T_DESERT, TERRAIN_NAME,
+  GRASS_ENERGY, SHRUB_ENERGY, CONV_E, DECAY_RETURN, HIST_WINDOW,
+  params, popCount,
+  tIdx, findNearest, forEachNear, rebuildHash, findBestPrey, worthPrey,
+  /* 活引用 */
+  get animals(){ return animals; },
+  get grass(){ return grass; },
+  get shrub(){ return shrub; },
+  get terrain(){ return terrain; },
+  get history(){ return history; },
+  get simTime(){ return simTime; },
+  get photosynthesis(){ return photosynthesis; },
+  get metabLoss(){ return metabLoss; },
+  get decayLoss(){ return decayLoss; },
+  get reproLoss(){ return reproLoss; },
+  get deaths(){ return deaths; },
+  get deathsBy(){ return deathsBy; },
+  get stability(){ return stability; },
+  get birthCount(){ return birthCount; },
+  get generationMax(){ return generationMax; },
+  get flowAnimal(){ return flowAnimal; },
+  get flowPlant(){ return flowPlant; },
+  get terrainCount(){ return terrainCount; },
+};
+</script>
+</body>
+</html>
+
+
+
